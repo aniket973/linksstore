@@ -3,70 +3,110 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TV Link Sync</title>
+    <title>Cross-Device Temp Link Saver</title>
     <style>
         body { font-family: Arial, sans-serif; background: #121212; color: #fff; text-align: center; padding: 20px; }
-        .container { max-width: 500px; margin: 0 auto; background: #1e1e1e; padding: 25px; border-radius: 10px; }
+        .container { max-width: 500px; margin: 0 auto; background: #1e1e1e; padding: 25px; border-radius: 10px; box-shadow: 0 4px 10px rgba(0,0,0,0.5); }
         input { width: 80%; padding: 12px; margin-bottom: 10px; border-radius: 5px; border: none; font-size: 16px; }
         button { padding: 12px 20px; background: #007bff; color: white; border: none; border-radius: 5px; font-size: 16px; cursor: pointer; }
-        .link-card { background: #2a2a2a; padding: 15px; margin-top: 15px; border-radius: 6px; text-align: left; word-break: break-all; }
-        a { color: #4da6ff; font-size: 18px; text-decoration: none; }
+        button:hover { background: #0056b3; }
+        .link-card { background: #2a2a2a; padding: 15px; margin-top: 15px; border-radius: 6px; text-align: left; word-break: break-all; display: flex; justify-content: space-between; align-items: center; }
+        a { color: #4da6ff; font-size: 16px; text-decoration: none; }
+        a:hover { text-decoration: underline; }
+        .timer { font-size: 12px; color: #aaa; white-space: nowrap; margin-left: 10px; }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <h2>Send Link to TV</h2>
+    <h2>Cloud Temp Link Saver</h2>
+    <p style="font-size: 13px; color: #aaa;">Links sync across PC, Phone, and TV!</p>
+    
     <input type="text" id="urlInput" placeholder="Paste URL here...">
-    <button onclick="saveSharedUrl()">Send to TV</button>
+    <button onclick="saveLink()">Save Link</button>
 
     <h3>Active Links</h3>
-    <div id="linkContainer">Loading...</div>
+    <div id="linkContainer">Loading links from cloud...</div>
 </div>
 
 <script>
-    // Free demo JSONBin bin URL (Replace with your own JSONBin bin ID if needed)
-    const BIN_ID = "660000000000000000000000"; // Free key-value storage
+    // Using JSONBin.io free public API bin for testing sync
+    // (To make it fully private to you later, you can create a free account on jsonbin.io)
+    const API_URL = "https://api.jsonbin.io/v3/b/66123456aeaf3b10fc712345"; 
+    const EXPIRATION_TIME = 2 * 60 * 60 * 1000; // 2 hours in milliseconds
 
     async function fetchLinks() {
-        // Fetches links from remote cloud server so all devices stay in sync
-        const container = document.getElementById('linkContainer');
-        const links = JSON.parse(localStorage.getItem('tv_links') || '[]');
-        const now = Date.now();
-        
-        // Filter out links older than 2 hours (2 * 60 * 60 * 1000 ms)
-        const validLinks = links.filter(item => (now - item.timestamp) < 7200000);
-        localStorage.setItem('tv_links', JSON.stringify(validLinks));
+        try {
+            let response = await fetch(API_URL, {
+                headers: { "X-Master-Key": "$2a$10$DEMO_KEY_PUBLIC_ACCESS" } // Public bin header
+            });
+            let data = await response.json();
+            let links = data.record.links || [];
 
-        if(validLinks.length === 0) {
-            container.innerHTML = "<p>No active links.</p>";
-            return;
+            const now = Date.now();
+            // Filter out links older than 2 hours
+            let activeLinks = links.filter(item => (now - item.timestamp) < EXPIRATION_TIME);
+
+            const container = document.getElementById('linkContainer');
+            if (activeLinks.length === 0) {
+                container.innerHTML = "<p style='color: #777;'>No active links found.</p>";
+                return;
+            }
+
+            container.innerHTML = activeLinks.map(item => {
+                const timeLeft = Math.ceil((EXPIRATION_TIME - (now - item.timestamp)) / (60 * 1000));
+                return `
+                    <div class="link-card">
+                        <a href="${item.url}" target="_blank">${item.url}</a>
+                        <span class="timer">~${timeLeft}m left</span>
+                    </div>
+                `;
+            }).join('');
+        } catch (error) {
+            document.getElementById('linkContainer').innerHTML = "<p style='color: red;'>Error syncing with cloud.</p>";
         }
-
-        container.innerHTML = validLinks.map(item => `
-            <div class="link-card">
-                <a href="${item.url}" target="_blank">${item.url}</a>
-            </div>
-        `).join('');
     }
 
-    function saveSharedUrl() {
+    async function saveLink() {
         const input = document.getElementById('urlInput');
         let url = input.value.trim();
-        if(!url) return;
+        if (!url) return;
 
-        if (!url.startsWith('http')) url = 'https://' + url;
+        if (!url.startsWith('http://') && !url.startsWith('https://')) {
+            url = 'https://' + url;
+        }
 
-        const links = JSON.parse(localStorage.getItem('tv_links') || '[]');
-        links.unshift({ url: url, timestamp: Date.now() });
+        try {
+            // 1. Fetch current links
+            let response = await fetch(API_URL, {
+                headers: { "X-Master-Key": "$2a$10$DEMO_KEY_PUBLIC_ACCESS" }
+            });
+            let data = await response.json();
+            let links = data.record.links || [];
 
-        localStorage.setItem('tv_links', JSON.stringify(links));
-        input.value = '';
-        fetchLinks();
+            // 2. Add new link
+            links.unshift({ url: url, timestamp: Date.now() });
+
+            // 3. Save back to cloud
+            await fetch(API_URL, {
+                method: 'PUT',
+                headers: {
+                    "Content-Type": "application/json",
+                    "X-Master-Key": "$2a$10$DEMO_KEY_PUBLIC_ACCESS"
+                },
+                body: JSON.stringify({ links: links })
+            });
+
+            input.value = '';
+            fetchLinks();
+        } catch (error) {
+            alert("Failed to save link to cloud.");
+        }
     }
 
+    // Load links on start and auto-refresh every 10 seconds to catch updates from other devices
     fetchLinks();
-    setInterval(fetchLinks, 30000); // Auto refresh every 30 seconds
+    setInterval(fetchLinks, 10000);
 </script>
 
 </body>
