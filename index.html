@@ -4,6 +4,14 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Cloud Temp Link Saver</title>
+    
+    <!-- PWA Manifest & Theme Meta Tags -->
+    <link rel="manifest" id="pwaManifest">
+    <meta name="theme-color" content="#0f172a">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Link Saver">
+
     <style>
         :root {
             --bg-color: #0f172a;
@@ -173,7 +181,33 @@
 </div>
 
 <script>
-    // 👇 REPLACE THESE TWO LINES WITH YOUR ACTUAL JSONBIN DETAILS 👇
+    // --- PWA SETUP (Generates manifest & service worker dynamically) ---
+    const manifestData = {
+        "name": "Cloud Temp Link Saver",
+        "short_name": "LinkSaver",
+        "start_url": window.location.href,
+        "display": "standalone",
+        "background_color": "#0f172a",
+        "theme_color": "#0f172a",
+        "icons": [
+            {
+                "src": "https://cdn-icons-png.flaticon.com/512/1006/1006771.png",
+                "sizes": "512x512",
+                "type": "image/png"
+            }
+        ]
+    };
+    const manifestBlob = new Blob([JSON.stringify(manifestData)], {type: 'application/json'});
+    document.getElementById('pwaManifest').setAttribute('href', URL.createObjectURL(manifestBlob));
+
+    if ('serviceWorker' in navigator) {
+        const swCode = `self.addEventListener('fetch', (event) => {});`;
+        const swBlob = new Blob([swCode], {type: 'text/javascript'});
+        navigator.serviceWorker.register(URL.createObjectURL(swBlob)).catch(() => {});
+    }
+    // -----------------------------------------------------------------
+
+    // 👇 YOUR JSONBIN DETAILS 👇
     const BIN_ID = "6af1e202ffd5d16053b3d3dd"; 
     const MASTER_KEY = "$2a$10$An56rqGvzb6DWwrnvIRiAOddYLcFCLpp83vI0DBHqoSMu.sPm2h9.";
     // -------------------------------------------------------------
@@ -181,7 +215,6 @@
     const API_URL = `https://api.jsonbin.io/v3/b/${BIN_ID}`;
     const EXPIRATION_TIME = 2 * 60 * 60 * 1000; // 2 hours in milliseconds
 
-    // SVG Icons Definitions
     const pinSvg = `<svg viewBox="0 0 24 24"><path d="M16 12V4h1V2H7v2h1v8l-2 2v2h5.2v6h1.6v-6H18v-2l-2-2z"/></svg>`;
     const trashSvg = `<svg viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>`;
 
